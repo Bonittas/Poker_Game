@@ -1,0 +1,58 @@
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14
+    container_name: poker-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pokerdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend API (FastAPI)
+  backend:
+    build:
+      context: ./poker-backend
+      dockerfile: Dockerfile
+    container_name: poker-backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/pokerdb
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./poker-backend:/app
+    command: >
+      bash -c "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # Frontend (Next.js )
+  frontend:
+    build:
+      context: ./poker-frontend
+      dockerfile: Dockerfile
+    container_name: poker-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./poker-frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
